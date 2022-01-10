@@ -1,0 +1,642 @@
+---
+title: "Summary Statistics & R"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Week 3
+
+## T-test
+
+### Exercizes
+
+
+For these exercises we will load a babies dataset. We will pretend that it contains the entire population in which we are interested. We will split it ino two birth weight datasets: one of birth weights to non-smoking mothers and the other of birth weights to smoking mothers.
+
+```{r, include=FALSE}
+
+url <- "https://raw.githubusercontent.com/genomicsclass/dagdata/master/inst/extdata/babies.txt"
+filename <- basename(url)
+download.file(url, destfile=filename)
+babies <- read.table("babies.txt", header=TRUE)
+
+library(dplyr)
+bwt.nonsmoke <- filter(babies, smoke==0) %>% select(bwt) %>% unlist 
+bwt.smoke <- filter(babies, smoke==1) %>% select(bwt) %>% unlist
+```
+
+Now, we can look for the true population difference in means between smoking and non-smoking birth weights.
+
+
+
+```{r}
+library(rafalib)
+mean(bwt.nonsmoke)-mean(bwt.smoke)
+popsd(bwt.nonsmoke)
+popsd(bwt.smoke)
+
+```
+
+We will treat the babies dataset as the full population and draw samples from it to simulate individual experiments. We will then ask whether somebody who only received the random samples would be able to draw correct conclusions about the population. We are interested in testing whether the birth weights of babies born to non-smoking mothers are significantly different from the birth weights of babies born to smoking mothers.
+
+Set the seed at 1 and obtain a samples from the non-smoking mothers (`dat.ns`) of size *N=25*. Then, without resetting the seed, take a sample of the same size from and smoking mothers (`dat.s`). Compute the t-statistic (call it `tval`). What is the absolute value of the t-statistic?
+
+```{r}
+set.seed(1)
+sample1 <- sample(bwt.nonsmoke, 25)
+sample2 <- sample(bwt.smoke, 25)
+tval <- t.test(sample1, sample2)$statistic
+abs(tval)
+```
+
+Recall that we summarize our data using a t-statistics because we know that in situations where the null hypothesis is true (what we mean when we say "under the null") and the sample size is relatively large, this t-value will have an approximate standard normal distribution. Because we know the distribution of the t-value under the null, we can quantitatively determine how unusual the observed t-value would be if the null hypothesis were true.
+
+The standard procedure is to examine the probability a t-statistic that actually does follow the null hypothesis would have larger absolute value than the absolute value of the t-value we just observed -- this is called a two-sided test.
+
+We have computed these by taking one minus the area under the standard normal curve between `-abs(tval)` and `abs(tval)`. In R, we can do this by using the `pnorm()` function, which computes the area under a normal curve from negative infinity up to the value given as its first argument:
+
+```{r}
+pval <- 1-(pnorm(abs(tval))-pnorm(-abs(tval)))
+pval <- 2*pnorm(-abs(tval))
+```
+
+## Confidence intervals
+
+### Lecture
+
+However, we do not recommend reporting p-values as the only statistical summary of your results. The reason is simple: statistical significance does not guarantee scientific significance. The problem with reporting only p-values is that you will not provide a very important piece of information: the effect size. Recall that the effect size is the observed difference. A much more attractive alternative is to report confidence intervals. 
+
+First, we will show how to construct a confidence interval for the population mean of control female mice.
+
+```{r}
+set.seed(1)
+dat <- read.csv("mice_pheno.csv")
+chowPopulation <- dat[dat$Sex=="F" & dat$Diet=="chow",3]
+```
+
+The population average $\mu_X$ is our parameter of interest here:
+
+```{r}
+mu_chow <- mean(chowPopulation)
+print(mu_chow)
+```
+
+
+We are interested in estimating this parameter. In practice, we do not get to see the entire population so, as we did for p-values, we demonstrate how we can use samples to do this. Let's start with a sample of size 30:
+
+```{r}
+N <- 30
+chow <- sample(chowPopulation,N)
+print(mean(chow))
+```
+
+We know this is a random variable, so the sample average will not be a perfect estimate. A confidence interval is a statistical way of reporting our finding, the sample average, in a way that explicitly summarizes the variability of our random variable.
+
+With a sample size of 30, we will use the CLT. The CLT tells us that $\bar{X}$ or `mean(chow)` follows a normal distribution with mean $\mu_X$ or `mean(chowPopulation)` and standard error approximately  $s_X/\sqrt{N}$ or:
+
+```{r}
+se <- sd(chow)/sqrt(N)
+print(se)
+```
+
+
+A 95% confidence interval is a random interval with a 95% probability of falling on the parameter we are estimating. To construct it, we note that the CLT tells us that $\sqrt{N} (\bar{X}-\mu_X) / s_X$ follows a normal distribution with mean 0 and SD 1. This implies that the probability of this event:
+
+$$
+-2 \leq \sqrt{N} (\bar{X}-\mu_X)/s_X \leq 2
+$$  
+
+which written in R code is:
+
+```{r}
+pnorm(2) - pnorm(-2)
+```
+
+...is about 95% (to get closer use `qnorm(1-0.05/2)` instead of 2). Now do some basic algebra to clear out everything and leave $\mu_X$ alone in the middle and you get that the following event: 
+
+$$
+\bar{X}-2 s_X/\sqrt{N} \leq \mu_X \leq \bar{X}+2s_X/\sqrt{N}
+$$  
+
+has a probability of 95%. 
+
+Be aware that it is the edges of the interval $\bar{X} \pm 2 s_X / \sqrt{N}$, not $\mu_X$, 
+that are random. Again, the definition of the confidence interval is that 95% of *random intervals* will contain the true, fixed value $\mu_X$. For a specific interval that has been calculated, the probability is either 0 or 1 that it contains the fixed population mean $\mu_X$.
+
+Let's demonstrate this logic through simulation. We can construct this interval with R relatively easily: 
+
+```{r}
+Q <- qnorm(1- 0.05/2)
+interval <- c(mean(chow)-Q*se, mean(chow)+Q*se )
+interval
+interval[1] < mu_chow & interval[2] > mu_chow
+```
+
+You will see that in about 5% of the cases, we fail to cover μX.
+
+For $N=30$, the CLT works very well. However, if $N=5$, do these confidence intervals work as well? We used the CLT to create our intervals, and with $N=5$ it may not be as useful an approximation. 
+
+Despite the intervals being larger (we are dividing by $\sqrt{5}$ instead of $\sqrt{30}$ ), we see many more intervals not covering $\mu_X$. This is because the CLT is incorrectly telling us that the distribution of the `mean(chow)` is approximately normal with standard deviation 1 when, in fact, it has a larger standard deviation and a fatter tail (the parts of the distribution going to $\pm \infty$). This mistake affects us in the calculation of `Q`, which assumes a normal distribution and uses `qnorm`. The t-distribution might be more appropriate. All we have to do is re-run the above, but change how we calculate `Q` to use `qt` instead of `qnorm`. Now the intervals are made bigger. This is because the t-distribution has fatter tails and therefore `qt` is bigger than `qnorm`, which makes the intervals larger and hence cover $μ_X$ more frequently; in fact, about 95% of the time.
+
+
+We recommend that in practice confidence intervals be reported instead of p-values.
+
+If we are talking about a t-test p-value, we are asking if differences as extreme as the one we observe, $\bar{Y} - \bar{X}$, are likely when the difference between the population averages is actually equal to zero. So we can form a confidence interval with the observed difference. Instead of writing $\bar{Y} - \bar{X}$ repeatedly, let's define this difference as a new variable $d \equiv \bar{Y} - \bar{X}$ . 
+
+If a 95% or 99% confidence interval does not include 0, then the p-value must be smaller than 0.05 or 0.01 respectively. 
+
+Note that the confidence interval for the difference $d$ is provided by the `t.test` function:
+
+```{r,echo=FALSE}
+dat <- read.csv("femaleMiceWeights.csv")
+controlIndex <- which(dat$Diet=="chow")
+treatmentIndex <- which(dat$Diet=="hf")
+control <- dat[controlIndex,2]
+treatment <- dat[treatmentIndex,2]
+```
+
+```{r}
+t.test(treatment,control)$conf.int
+```
+
+In this case, the 95% confidence interval does include 0 and we observe that the p-value is larger than 0.05 as predicted. If we change this to a 90% confidence interval, then:
+
+```{r}
+t.test(treatment,control,conf.level=0.9)$conf.int
+```
+
+0 is no longer in the confidence interval (which is expected because the p-value is smaller than 0.10). 
+
+
+
+### Exercizes
+
+For these exercises we will load a babies dataset. We will pretend that it contains the entire population in which we are interested. We will split it ino two birth weight datasets: one of birth weights to non-smoking mothers and the other of birth weights to smoking mothers.
+
+```{r, include=FALSE}
+
+url <- "https://raw.githubusercontent.com/genomicsclass/dagdata/master/inst/extdata/babies.txt"
+filename <- basename(url)
+download.file(url, destfile=filename)
+babies <- read.table("babies.txt", header=TRUE)
+
+library(dplyr)
+bwt.nonsmoke <- filter(babies, smoke==0) %>% select(bwt) %>% unlist 
+bwt.smoke <- filter(babies, smoke==1) %>% select(bwt) %>% unlist
+```
+
+Now, we can look for the true population difference in means between smoking and non-smoking birth weights.
+
+```{r}
+library(rafalib)
+mean(bwt.nonsmoke)-mean(bwt.smoke)
+popsd(bwt.nonsmoke)
+popsd(bwt.smoke)
+
+```
+
+We will treat the babies dataset as the full population and draw samples from it to simulate individual experiments. We will then ask whether somebody who only received the random samples would be able to draw correct conclusions about the population.
+Set the seed at 1 and obtain two samples, each of size $N$ = 25, from non-smoking mothers (`dat.ns`) and smoking mothers (`dat.s`). If instead of CLT, we use the t-distribution approximation, what do we add and subtract to obtain a 99% confidence interval (use 2*N-2 degrees of freedom)?
+
+```{r}
+N <- 25
+set.seed(1)
+dat.ns <- sample(bwt.nonsmoke, N)
+dat.s <- sample(bwt.smoke, N)
+Q <- qt(1-.01/2, df=2*N-2)
+se <- sqrt( sd( dat.ns)^2/N + sd( dat.s)^2/N )
+Q*se
+```
+
+No matter which way you compute it, the p-value `pval` is the probability that the null hypothesis could have generated a t-statistic more extreme than than what we observed: `tval.` If the p-value is very small, this means that observing a value more extreme than `tval` would be very rare if the null hypothesis were true, and would give strong evidence that we should reject the null hypothesis. We determine how small the p-value needs to be to reject the null by deciding how often we would be willing to mistakenly reject the null hypothesis.
+
+The standard decision rule is the following: choose some small value $α$ (in most disciplines the conventional choice is  $α$=0.05 ) and reject the null hypothesis if the p-value is less than $α$ . We call $α$ the significance level of the test.
+
+It turns out that if we follow this decision rule, the probability that we will reject the null hypothesis by mistake is equal to $α$. (This fact is not immediately obvious and requires some probability theory to show.) We call the *event* of rejecting the null hypothesis, when it is in fact true, a *Type I error*, we call the *probability* of making a Type I error, the *Type I error rate*, and we say that rejecting the null hypothesis when the p-value is less than $α$, *controls* the Type I error rate so that it is equal to $α$. We will see a number of decision rules that we use in order to control the probabilities of other types of errors. Often, we will guarantee that the probability of an error is less than some level, but, in this case, we can guarantee that the probability of a Type I error is *exactly equal* to $α$. From the original data alone, you can tell whether you have made a Type I error.
+
+
+In the simulation we have set up here, we know the null hypothesis is false -- the true value of difference in means is actually around $8.9$. Thus, we are concerned with how often the decision rule outlined in the last section allows us to conclude that the null hypothesis is actually false. In other words, we would like to quantify the *Type II error rate* of the test, or the probability that we fail to reject the null hypothesis when the alternative hypothesis is true.
+
+Unlike the Type I error rate, which we can characterize by assuming that the null hypothesis of "no difference" is true, the Type II error rate cannot be computed by assuming the alternative hypothesis alone because the alternative hypothesis alone does not specify a particular value for the difference. It thus does not nail down a specific distribution for the t-value under the alternative.
+
+For this reason, when we study the Type II error rate of a hypothesis testing procedure, we need to assume a particular *effect size*, or hypothetical size of the difference between population means, that we wish to target. We ask questions such as "what is the smallest difference I could reliably distinguish from 0 given my sample size $N$?" or, more commonly, "How big does $N$ have to be in order to detect that the absolute value of the difference is greater than zero?" Type II error control plays a major role in designing data collection procedures **before** you actually see the data, so that you know the test you will run has enough sensitivity or *power*. Power is one minus the Type II error rate, or the probability that you will reject the null hypothesis when the alternative hypothesis is true.
+
+There are several aspects of a hypothesis test that affect its power for a particular effect size. Intuitively, setting a lower $α$ decreases the power of the test for a given effect size because the null hypothesis will be more difficult to reject. This means that for an experiment with fixed parameters (i.e., with a predetermined sample size, recording mechanism, etc), the power of the hypothesis test trades off with its Type I error rate, no matter what effect size you target.
+
+We can explore the trade off of power and Type I error concretely using the babies data. Since we have the full population, we know what the true effect size is (about 8.93) and we can compute the power of the test for true difference between populations.
+
+Set the seed at 1 and take a random sample of  N=5  measurements from each of the smoking and nonsmoking datasets. What is the p-value (use the t.test() function)?
+
+```{r}
+N <- 5
+set.seed(1)
+dat.ns <- sample(bwt.nonsmoke, N)
+dat.s <- sample(bwt.smoke, N)
+t.test(dat.ns, dat.s)$p.value
+```
+
+## Power calculation
+
+### Lecture
+
+Type I error: there is no difference, but compile that there is (false-positive)
+Type II error: there is a difference, but we fail to detect it (false-negative)
+  Higher change for Type II error when the sample size is small.
+alpha: the cut-off at which we reject the null hypothesis if the p-value is smaller
+Power: the probability of rejecting the hypothesis when the alternative is true
+  As N get bigger, power increases.
+  Decide sample size based on, population sd, effect size, power required
+
+
+### Exercizes
+
+For these exercises we will load a babies dataset. We will pretend that it contains the entire population in which we are interested. We will split it ino two birth weight datasets: one of birth weights to non-smoking mothers and the other of birth weights to smoking mothers.
+
+```{r, include=FALSE}
+
+url <- "https://raw.githubusercontent.com/genomicsclass/dagdata/master/inst/extdata/babies.txt"
+filename <- basename(url)
+download.file(url, destfile=filename)
+babies <- read.table("babies.txt", header=TRUE)
+
+library(dplyr)
+bwt.nonsmoke <- filter(babies, smoke==0) %>% select(bwt) %>% unlist 
+bwt.smoke <- filter(babies, smoke==1) %>% select(bwt) %>% unlist
+```
+
+Now, we can look for the true population difference in means between smoking and non-smoking birth weights.
+
+```{r}
+library(rafalib)
+mean(bwt.nonsmoke)-mean(bwt.smoke)
+popsd(bwt.nonsmoke)
+popsd(bwt.smoke)
+
+```
+
+We will treat the babies dataset as the full population and draw samples from it to simulate individual experiments. We will then ask whether somebody who only received the random samples would be able to draw correct conclusions about the population.
+
+We can explore the trade off of power and Type I error concretely using the babies data. Since we have the full population, we know what the true effect size is (about 8.93) and we can compute the power of the test for true difference between populations.
+
+Set the seed at 1 and take a random sample of N=5 measurements from each of the smoking and nonsmoking datasets. Use the t-test function to find the p-value. 
+
+The p-value is larger than 0.05 so using the typical cut-off, we would not reject. This is a type II error. This type of error can be decreased by: increaing our chane of a type I error, taking a larger sample size or using a higher $\alpha$ level.
+
+```{r}
+N <- 5
+set.seed(1)
+dat.ns <- sample(bwt.nonsmoke, N)
+dat.s <- sample(bwt.smoke, N)
+t.test(dat.ns, dat.s)$p.value
+```
+
+Set the seed at 1, then use the `replicate()` function to repeat the code used in the exercise above 10,000 times. What proportion of the time do we reject at the 0.05 level?
+
+```{r}
+N <- 5
+B <- 10000
+set.seed(1)
+
+reject <- function(N, alpha=0.05){
+  dat.ns <- sample(bwt.nonsmoke, N)
+  dat.s <- sample(bwt.smoke, N)
+  pval <- t.test(dat.ns, dat.s)$p.value
+  pval < alpha
+}
+
+rejections <- replicate(B, reject(N))
+mean(rejections)
+```
+
+Note that, not surprisingly, the power is lower than 10%. Repeat the exercise above for samples sizes of 30, 60, 90 and 120. Which of those four gives you power of about 80%?
+
+```{r}
+Ns <- c(30, 60, 90, 120)
+B <- 10000
+set.seed(1)
+
+reject <- function(N, alpha=0.05){
+  dat.ns <- sample(bwt.nonsmoke, N)
+  dat.s <- sample(bwt.smoke, N)
+  pval <- t.test(dat.ns, dat.s)$p.value
+  pval < alpha
+}
+
+power <- sapply(Ns,function(N){
+  rejections <- replicate(B, reject(N))
+  mean(rejections)
+  })
+
+print(power)
+```
+
+Repeat the problem above, but now require an  α  level of 0.01. Which of those four gives you power of about 80%?
+
+```{r}
+Ns <- c(30, 60, 90, 120)
+B <- 10000
+set.seed(1)
+
+reject <- function(N, alpha=0.01){
+  dat.ns <- sample(bwt.nonsmoke, N)
+  dat.s <- sample(bwt.smoke, N)
+  pval <- t.test(dat.ns, dat.s)$p.value
+  pval < alpha
+}
+
+power <- sapply(Ns,function(N){
+  rejections <- replicate(B, reject(N))
+  mean(rejections)
+  })
+
+print(power)
+```
+
+
+## Monte Carlo Simulation
+
+### Lecture
+
+Monte Carlo simulations: generating random variables using a computer
+They are used to test how well approximations of distributions work
+Does CLT work well for this data set? Is the sample size high enough to assume CLT? --> qqnorm
+Does the t-distribution work well for this data set? --> qq-plot
+However, we don't have access to the population data. 
+We could generate population data using parametric Monte Carlo with a certain mean and sd --> normally distributed data --> rnorm: random number generator
+
+
+### Exercizes
+
+Imagine you are William Sealy Gosset and have just mathematically derived the distribution of the t-statistic when the sample comes from a normal distribution. Unlike Gosset, you have access to computers and can use them to check the results.
+
+Let's start by creating an outcome.
+
+Set the seed at 1, then use `rnorm()` to generate a random sample of size 5, $X_1,...,X_5$ from a standard normal distribution, then compute the t-statistic $t=\sqrt{5}\bar{X}/s$ with $s$ the sample standard deviation. What value do you observe?
+
+```{r}
+N <- 5
+set.seed(1)
+
+X <- rnorm(N)
+tstat <- sqrt(N)*mean(X)/sd(X)
+print(tstat)
+```
+
+You have just performed a Monte Carlo simulation using `rnorm()`, a random number generator for normally distributed data. Gosset's mathematical calculation tells us that the t-statistic defined in the previous exercises, a random variable, follows a t-distribution with $N−1$ degrees of freedom. Monte Carlo simulations can be used to check the theory: we generate many outcomes and compare them to the theoretical result. Set the seed to 1, then generate $B=1000$ t-statistics as done in exercise 1. What proportion is larger than 2?
+
+```{r}
+N <- 5
+B<- 1000
+set.seed(1)
+
+tstats <- replicate(B,{
+  X <- rnorm(N)
+  sqrt(N)*mean(X)/sd(X)
+})
+mean(tstats>2)
+```
+
+The answer to exercise 2 is very similar to the theoretical prediction: `1-pt(2,df=4)`. We can check several such quantiles using the qqplot function.
+
+To obtain quantiles for the t-distribution we can generate percentiles from just above 0 to just below 1: `B=100; ps = seq(1/(B+1), 1-1/(B+1),len=B)`, and compute the quantiles with `qt(ps,df=4)`. Now we can use `qqplot()` to compare these theoretical quantiles to those obtained in the Monte Carlo simulation. Use Monte Carlo simulation developed for exercise 2 to corroborate that the t-statistic $t=\sqrt{N}\bar{X}/s$ follows a t-distribution for several values of $N$ (try `Ns < seq(5,30,5)`).
+
+```{r}
+library(rafalib)
+mypar(3,2)
+
+Ns <- seq(5,30,5)
+B <- 1000
+ps <- seq(1/(B+1),1-1/(B+1),len=B)
+
+LIM <- c(-4.5,4.5)
+for(N in Ns){
+	tstat <- replicate(B, {
+    X <- rnorm(N)
+    sqrt(N)*mean(X)/sd(X)
+  })
+  qqplot(qt(ps,df=N-1), tstat, 
+         main=N,
+         xlab="Theoretical",ylab="Observed",
+         xlim=LIM, ylim=LIM)
+  abline(0,1)
+} 
+
+```
+
+Use Monte Carlo simulation to corroborate that the t-statistic comparing two means and obtained with normally distributed (mean 0 and sd) data follows a t-distribution. In this case we will use the `t.test()` function with `var.equal=TRUE`. With this argument the degrees of freedom will be `df=2*N-2` with `N` the sample size. For which sample sizes does the approximation best work?
+
+```{r}
+library(rafalib)
+
+Ns <- seq(5,30,5)
+B <- 1000
+mypar(3,2)
+ps <- seq(1/(B+1),1-1/(B+1),len=B)
+
+LIM <- c(-4.5,4.5)
+for(N in Ns){
+	tstat <- replicate(B, {
+    x <- rnorm(N)
+    y <- rnorm(N)
+    t.test(x, y, var.equal=TRUE)$statistic
+  })
+  qqplot(qt(ps,df=2*N-1), tstat, 
+       main=N,
+       xlab="Theoretical",ylab="Observed",
+       xlim=LIM, ylim=LIM)
+  abline(0,1)
+}
+
+```
+
+Is the following statement true or false? If instead of generating the sample with `X=rnorm(15)` we generate it with binary data (either positive or negative 1 with probability 0.5) `X =sample(c(-1,1), 15, replace=TRUE)` then the t-statistic
+
+```{r}
+tstat <- sqrt(15)*mean(X) / sd(X)
+tstat
+```
+
+is approximated by a t-distribution with 14 degrees of freedom. --> FALSE
+
+```{r}
+set.seed(1)
+N <- 15
+B <- 10000
+tstats <- replicate(B,{
+  X <- sample(c(-1,1), N, replace=TRUE)
+  sqrt(N)*mean(X)/sd(X)
+})
+ps=seq(1/(B+1), 1-1/(B+1), len=B) 
+qqplot(qt(ps,N-1), tstats, xlim=range(tstats))
+abline(0,1)
+```
+
+
+Is the following statement true or false ? 
+If instead of generating the sample with `X=rnorm(N)` with `N=1000`, we generate the data with binary data `X= sample(c(-1,1), N, replace=TRUE)`, then the t-statistic `sqrt(N)*mean(X)/sd(X)` is approximated by a t-distribution with 999 degrees of freedom.
+
+```{r}
+set.seed(1)
+N <- 15
+B <- 10000
+tstats <- replicate(B,{
+  X <- sample(c(-1,1), N, replace=TRUE)
+  sqrt(N)*mean(X)/sd(X)
+})
+ps=seq(1/(B+1), 1-1/(B+1), len=B) 
+qqplot(qt(ps,N-1), tstats, xlim=range(tstats))
+abline(0,1)
+```
+
+Is the following statement true or false ? 
+If instead of generating the sample with `X=rnorm(N)` with `N=1000`, we generate the data with binary data `X= sample(c(-1,1), N, replace=TRUE)`, then the t-statistic `sqrt(N)*mean(X)/sd(X)` is approximated by a t-distribution with 999 degrees of freedom
+
+```{r}
+set.seed(1)
+N <- 1000
+B <- 10000
+tstats <- replicate(B,{
+  X <- sample(c(-1,1), N, replace=TRUE)
+  sqrt(N)*mean(X)/sd(X)
+})
+ps=seq(1/(B+1), 1-1/(B+1), len=B) 
+qqplot(qt(ps,N-1), tstats, xlim=range(tstats))
+abline(0,1)
+```
+
+We can derive approximation of the distribution of the sample average or the t-statistic theoretically. However, suppose we are interested in the distribution of a statistic for which a theoretical approximation is not immediately obvious.
+
+Consider the sample median as an example. Use a Monte Carlo to determine which of the following best approximates the median of a sample taken from normally distributed population with mean 0 and standard deviation 1.
+
+```{r}
+library(rafalib)
+mypar(2,3)
+
+set.seed(1)
+Ns <- seq(5,30,5)
+B <- 10000
+
+for(N in Ns){
+  medians <- replicate(B, median ( rnorm(N) ) )
+  title <- paste("N=",N,", avg=",round( mean(medians), 2) , ", sd*sqrt(N)=", round( sd(medians)*sqrt(N),2) )
+  qqnorm(medians, main = title )
+  qqline(medians)
+}
+
+```
+
+
+## Permutations 
+
+### Exercises
+
+For these exercises we will load a babies dataset. We will pretend that it contains the entire population in which we are interested. We will split it ino two birth weight datasets: one of birth weights to non-smoking mothers and the other of birth weights to smoking mothers.
+
+```{r, include=FALSE}
+babies <- read.table("babies.txt", header=TRUE)
+
+library(dplyr)
+bwt.nonsmoke <- filter(babies, smoke==0) %>% select(bwt) %>% unlist 
+bwt.smoke <- filter(babies, smoke==1) %>% select(bwt) %>% unlist
+```
+
+We will generate the following random variable based on a sample size of 10 and observe the following difference:
+
+```{r}
+N=10
+set.seed(1)
+
+nonsmokers <- sample(bwt.nonsmoke , N)
+smokers <- sample(bwt.smoke , N)
+obs <- mean(smokers) - mean(nonsmokers)
+```
+
+The question is whether this observed difference is statistically significant. We do not want to rely on the assumptions needed for the normal or t-distribution approximations to hold, so instead we will use permutations. We will reshuffle the data and recompute the mean. We can create one permuted sample with the following code:
+
+```{r}
+dat <- c(smokers,nonsmokers)
+shuffle <- sample( dat )
+smokersstar <- shuffle[1:N]
+nonsmokersstar <- shuffle[(N+1):(2*N)]
+mean(smokersstar)-mean(nonsmokersstar)
+```
+
+The last value is one observation from the null distribution we will construct. Set the seed at 1, and then repeat the permutation 1,000 times to create a null distribution. What is the permutation derived p-value for our observation?
+
+```{r}
+B <- 1000
+N=10
+set.seed(1)
+
+nonsmokers <- sample(bwt.nonsmoke , N)
+smokers <- sample(bwt.smoke , N)
+obs <- mean(smokers) - mean(nonsmokers)
+dat <- c(smokers,nonsmokers)
+
+null <- replicate(B,{
+  shuffle <- sample( dat )
+  smokersstar <- shuffle[1:N]
+  nonsmokersstar <- shuffle[(N+1):(2*N)]
+  mean(smokersstar)-mean(nonsmokersstar)
+})
+
+( sum( abs(null) >= abs(obs)) +1 ) / ( length(null)+1 ) 
+```
+
+Repeat the above exercise, but instead of the differences in mean, consider the differences in median `obs <- median(smokers) - median(nonsmokers)`. What is the permutation based p-value?
+
+```{r}
+B <- 1000
+N=10
+set.seed(1)
+
+nonsmokers <- sample(bwt.nonsmoke , N)
+smokers <- sample(bwt.smoke , N)
+obs <- median(smokers) - median(nonsmokers)
+dat <- c(smokers,nonsmokers)
+
+null <- replicate(B,{
+  shuffle <- sample( dat )
+  smokersstar <- shuffle[1:N]
+  nonsmokersstar <- shuffle[(N+1):(2*N)]
+  median(smokersstar) - median(nonsmokersstar)
+})
+
+( sum( abs(null) >= abs(obs)) +1 ) / ( length(null)+1 ) 
+```
+
+## Association tests
+
+### Lecture
+
+Statisic --> summary of the data and a probability distribution
+Hypothesis test --> could this happen by chance?
+p-value --> chances of alternative hypothesis happening by chance
+
+Would we see this again if we picked another N individuals?
+The more data: less likely to see big differences by chance.
+The more data: the variability due to randomness decreases with respect to the real differences
+
+
+### Exercizes
+
+This dataframe reflects the allele status (either AA/Aa or aa) and the case/control status for 72 individuals.
+
+```{r}
+d = read.csv("assoctest.csv")
+dat <- table(d)
+chisq.test(dat)$statistic
+fisher.test(dat)$p.value
+```
+
+Compute the Chi-square test for the association of genotype with case/control status (using the `table()` function and the `chisq.test()` function). Examine the table to see if it looks enriched for association by eye.
+
+What is the X-squared statistic?
+
+
+
+
+

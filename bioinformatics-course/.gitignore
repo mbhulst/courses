@@ -1,0 +1,9 @@
+.idea
+venv
+test.py
+data.txt
+E_coli.txt
+integer_mass_table.txt
+RNA_codon_table.txt
+Vibrio_cholerae.txt
+__pycache__

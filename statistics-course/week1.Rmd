@@ -1,0 +1,193 @@
+---
+title: "Summary Statistics & R"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Week 1
+
+### Instructions Week 1
+
+You can go through the [swirl](http://swirlstats.com/) tutorial, which teaches you R programming and data science interactively, at your own pace and in the R console. Once you have R installed, you can install `swirl` and run it the following way: 
+
+```{r, eval=FALSE}
+install.packages("swirl")
+library(swirl)
+swirl()
+```
+
+You can download packages with the `install.packages` function and load them with the `library` function. You need to install the packages only once. Every session you need to load the packages into your library.
+
+```{r, eval=FALSE}
+install.packages("rafalib")
+library(rafalib)
+```
+
+You can see your working directory by typing:
+
+```{r, eval=FALSE}
+getwd()
+```
+
+If you have this file in your working directory, then you can simply read it in like this:
+
+```{r,eval=FALSE}
+dat <- read.csv("femaleMiceWeights.csv")
+```
+
+
+To install packages from GitHub you will need to install the `devtools` package:
+
+```{r,eval=FALSE}
+install.packages("devtools")
+```
+
+
+### Exercizes Week 1
+
+
+#### Some basic functions in R
+
+Getting started with vectors and such. 
+
+```{r,eval=FALSE}
+x <- c(2.23, 3.45, 1.87, 2.11, 7.33, 18.34, 19.23)
+mean(x)
+
+sum <- 0
+for(i in 1:25)
+  sum <- sum + i^2
+sum
+
+# The cars dataset is available in base R.
+class(cars)
+nrow(cars)
+mean(cars[,2])
+which(cars[,2]==85)
+```
+
+Read in the file `femaleMiceWeights.csv` and report the exact name of the column containing the weights.
+
+```{r,eval=FALSE}
+dat <- read.csv("femaleMiceWeights.csv")
+head(dat)
+names(dat)[2]
+```
+
+What is the entry in the 12th row and second column?
+
+```{r,eval=FALSE}
+dat[12,2]
+```
+
+Use $ to extract the weight column and report the weight of the mouse in the 11th row.
+
+```{r,eval=FALSE}
+weights <- dat$Bodyweight
+weights[11]
+```
+
+How many mice are included in our dataset?
+
+```{r,eval=FALSE}
+weights <- dat$Bodyweight
+length(weights)
+```
+
+What is the average weight of mice on the high fat diet?
+
+```{r,eval=FALSE}
+View(dat) 
+weights <- dat$Bodyweight
+mean(weights[13:24])
+```
+
+Now take a random sample of size 1 from the numbers 13 to 24 and report back the weight of the mouse represented by that row. 
+
+```{r,eval=FALSE}
+set.seed(1)
+i <- sample(13:24, 1)
+dat$Bodyweight[i]
+```
+
+
+#### Using dplyr package
+
+For the next exercises, we will use a new dataset related to mammalian sleep. 
+
+```{r, eval=FALSE}
+dat <- read.csv("msleep_ggplot2.csv")
+class(dat)
+```
+
+We will use the `dplyr` functions, `select()` and `filter()`. Now use the `filter()` function to select only the primates. How many animals in the table are primates?
+
+```{r, eval=FALSE}
+library(dplyr)
+head(dat)
+dat2 <- filter(dat, order=="Primates")
+nrow(dat2)
+class(dat2)
+```
+
+Now we want to calculate the average amount of sleep for primates (the average of the numbers computed above). One challenge is that the `mean()` function requires a vector so, if we simply apply it to the output above, we get an error. Use `unlist()` and to compute the desired average. What is the average amount of sleep for primates?
+
+```{r, eval=FALSE}
+y <- filter(dat, order=="Primates") %>% select(sleep_total) %>% unlist
+mean(y)
+
+filter(dat, order=="Primates") %>% summarize( mean( sleep_total) )  # same but shorter
+```
+
+
+#### Plots in R
+
+Load new data into R
+```{r, eval=FALSE}
+load("skew.RData")
+dim(dat)
+```
+
+You can use the following line of code to set up a grid for 3x3=9 plots. (`mfrow` means we want a multifigure grid filled in row-by-row.Another choice is `mfcol`.)
+
+```{r, eval=FALSE}
+par(mfrow = c(3,3))
+```
+
+Which column has positive skew (a long tail to the right)?
+
+```{r, eval=FALSE}
+for (i in 1:9) {
+    qqnorm(dat[,i])
+    qqline(dat[,i])
+}
+hist(dat[,4])
+
+```
+
+Which spray seems the most effective (has the lowest median count)? --> C
+
+```{r, eval=FALSE}
+head(InsectSprays)
+boxplot(split(InsectSprays$count, InsectSprays$spray))
+
+boxplot(InsectSprays$count ~ InsectSprays$spray)  # same but shorter
+```
+
+
+Use boxplots and histograms to compare the finishing times of males and females. Which of the following best describes the difference?
+
+```{r, eval=FALSE}
+library(dplyr)
+data(nym.2002, package="UsingR")
+par(mfrow = c(1,3))
+males <- filter(nym.2002, gender=="Male") %>% select(time) %>% unlist
+females <- filter(nym.2002, gender=="Female") %>% select(time) %>% unlist
+boxplot(females, males)
+hist(females,xlim=c(range( nym.2002$time)))
+hist(males,xlim=c(range( nym.2002$time)))
+```
+

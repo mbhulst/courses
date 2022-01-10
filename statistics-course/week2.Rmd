@@ -1,0 +1,590 @@
+---
+title: "Summary Statistics & R"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Week 2
+
+### Instructions Week 2
+
+#### Random variables
+
+We are interested in determining if following a given diet makes mice heavier after several weeks. This data was produced by ordering 24 mice from The Jackson Lab and randomly assigning either chow or high fat (hf) diet. After several weeks, the scientists weighed each mice and obtained this data.Are the hf mice heavier? Let’s look at the average of each group:
+
+```{r,message=FALSE}
+dat <- read.csv("femaleMiceWeights.csv")
+head(dat)
+
+library(dplyr)
+control <- filter(dat, Diet=="chow") %>% dplyr::select(Bodyweight) %>% unlist
+treatment <- filter(dat, Diet=="hf") %>% dplyr::select(Bodyweight) %>% unlist
+
+print( mean(treatment) )
+print( mean(control) )
+
+obsdiff <- mean(treatment) - mean(control)
+```
+
+If we repeat the experiment, we obtain 24 new mice from The Jackson Laboratory and, after randomly assigning them to each diet, we get a different mean. Every time we repeat this experiment, we get a different value. We call this type of quantity a random variable.
+
+Imagine that we actually have the weight of all control female mice and can upload them to R. In Statistics, we refer to this as the population. These are all the control mice available from which we sampled 24. Note that in practice we do not have access to the population.
+
+```{r}
+dat <- read.csv("femaleControlsPopulation.csv")
+head(dat)
+
+population <- dat %>% unlist
+mean(population)
+```
+
+Now let’s sample 12 mice three times and see how the average changes. Note how the average varies. We can continue to do this repeatedly and start learning something about the distribution of this random variable.
+
+```{r}
+control <- sample(population,12)
+mean(control)
+control <- sample(population,12)
+mean(control)
+control <- sample(population,12)
+mean(control)
+```
+
+#### The Null Hypothesis
+
+Because we have access to the population, we can actually observe as many values as we want of the difference of the averages when the diet has no effect. We can do this by randomly sampling 24 control mice, giving them the same diet, and then recording the difference in mean between two randomly split groups of 12 and 12. So, we could compute the variance in the control population.
+
+```{r}
+##12 control mice
+control <- sample(population,12)
+##another 12 control mice that we act as if they were not
+treatment <- sample(population,12)
+print(mean(treatment) - mean(control))
+```
+
+Now let’s do it 10,000 times. We will use a “for-loop”, an operation that lets us automate this (a simpler approach that, we will learn later, is to use replicate). The values in null form what we call the null distribution. Then we find what percentage of th 10,000 are bigger than `obsdiff`. This is what is known as a p-value, which we will define more formally later.
+
+```{r}
+set.seed(1)
+n <- 10000
+null <- vector("numeric",n)
+for (i in 1:n) {
+  control <- sample(population,12)
+  treatment <- sample(population,12)
+  null[i] <- mean(treatment) - mean(control)
+}
+mean(null >= obsdiff)
+```
+
+#### Distributions
+
+The simplest way to think of a distribution is as a compact description of many numbers. We use a dataset with heights of fathers and sons provided by R.
+
+```{r, include=FALSE}
+library(UsingR)
+x <- father.son$fheight
+round(sample(x,10),1)
+```
+
+To define a distribution we compute, for all possible values of `a`, the proportion of numbers in our list that are below `a`. This is called the cumulative distribution function (CDF). When the CDF is derived from data, as opposed to theoretically, we also call it the empirical CDF (ECDF). We can plot it like this:
+
+```{r}
+smallest <- floor( min(x) )
+largest <- ceiling( max(x) )
+values <- seq(smallest, largest,len=300)
+heightecdf <- ecdf(x)
+plot(values, heightecdf(values), type="l", 
+     xlab="a (Height in inches)",ylab="Pr(x <= a)")
+```
+
+The `ecdf` function is a function that returns a function. The `ecdf` is actually not as popular as histograms, which give us the same information, but show us the proportion of values in intervals.
+
+
+```{r}
+bins <- seq(smallest, largest)
+hist(x,breaks=bins,xlab="Height (in inches)",main="Adult men heights")
+```
+
+
+#### Probability Distribution
+
+Summarizing lists of numbers is one powerful use of distribution. An even more important use is describing the possible outcomes of a random variable. Unlike a fixed list of numbers, we don’t actually observe all possible outcomes of random variables, so instead of describing proportions, we describe probabilities.
+
+In the case above, if we know the distribution of the difference in mean of mouse weights when the null hypothesis is true, referred to as the null distribution, we can compute the probability of observing a value as large as we did, referred to as a p-value.
+
+Let’s repeat the loop above, but this time let’s add a point to the figure every time we re-run the experiment. If you run this code, you can see the null distribution forming as the observed values stack on top of each other.
+
+```{r}
+library(rafalib)
+nullplot(-5,5,1,30, xlab="Observed differences (grams)", ylab="Frequency")
+totals <- vector("numeric",11)
+for (i in 1:n) {
+  control <- sample(population,12)
+  treatment <- sample(population,12)
+  nulldiff <- mean(treatment) - mean(control)
+  j <- pmax(pmin(round(nulldiff)+6,11),1)
+  totals[j] <- totals[j]+1
+  text(j-6,totals[j],pch=15,round(nulldiff,1))
+  ##if(i < 15) Sys.sleep(1) ##You can add this line to see values appear slowly
+  }
+```
+
+From a histogram of the null vector we calculated earlier, we can see that values as large as `obsdiff` are relatively rare:
+
+```{r}
+hist(null, freq=TRUE)
+abline(v=obsdiff, col="red", lwd=2)
+```
+
+#### Normal Distribution
+
+An important point to keep in mind here is that while we defined Pr(a) by counting cases, we will learn that, in some circumstances, mathematics gives us formulas for Pr(a) that save us the trouble of computing them as we did here. One example of this powerful approach uses the normal distribution approximation. It is stored in a more convenient form (as `pnorm` in R which sets *a* to $-\infty$, and takes *b* as an argument). 
+
+$$
+\mbox{Pr}(a < x < b) = \int_a^b \frac{1}{\sqrt{2\pi\sigma^2}} \exp{\left( \frac{-(x-\mu)^2}{2 \sigma^2} \right)} \, dx
+$$
+
+Here $\mu$ and $\sigma$ are referred to as the mean and the standard deviation of the population. If this *normal approximation* holds for our list, then the population mean and variance of our list can be used in the formula above. An example of this would be when we noted above that only 1.5%
+of values on the null distribution were above `obsdiff`. We can compute the proportion of values below a value `x` with `pnorm(x,mu,sigma)` without knowing all the values. The normal approximation works very well here: 
+
+```{r}
+1 - pnorm(obsdiff,mean(null),sd(null))
+```
+
+#### Populations, Samples and Estimates
+
+A first step in statistical inference is to understand what population you are interested in. In the mouse weight example, we have two populations: female mice on control diets and female mice on high fat diets, with weight being the outcome of interest. We consider this population to be fixed, and the randomness comes from the sampling. One reason we have been using this dataset as an example is because we happen to have the weights of all the mice of this type. Here we download and read in this dataset. We can then access the population values and determine, for example, how many we have. Here we compute the size of the control population.
+
+```{r, message=FALSE}
+dat <- read.csv("mice_pheno.csv")
+library(dplyr)
+controlPopulation <- filter(dat,Sex == "F" & Diet == "chow") %>% dplyr::select(Bodyweight) %>% unlist
+length(controlPopulation)
+hfPopulation <- filter(dat,Sex == "F" & Diet == "hf") %>% dplyr::select(Bodyweight) %>% unlist
+length(hfPopulation)
+```
+
+The question we started out asking can now be written mathematically: is $\mu_Y - \mu_X = 0$ ? 
+
+
+Although in our illustration we have all the values and can check if this is true, in practice we do not. For example, in practice it would be prohibitively expensive to buy all the mice in a population. Here we learn how taking a sample permits us to answer our questions. This is the essence of statistical inference.
+
+Next, we will describe how the Central Limit Theorem permits us to use an approximation to answer this question, as well as motivate the widely used t-distribution.
+
+#### Central Limit Theorem
+
+It tells us that when the sample size is large, the average $\bar{Y}$ of a random sample follows a normal distribution centered at the population average $\mu_Y$ and with standard deviation equal to the population standard deviation $\sigma_Y$, divided by the square root of the sample size $N$. We refer to the standard deviation of the distribution of a random variable as the random variable's _standard error_.
+
+If we take many samples of size $N$, then the quantity: 
+
+$$
+\frac{\bar{Y} - \mu}{\sigma_Y/\sqrt{N}}
+$$
+
+is approximated with a normal distribution centered at 0 and with standard deviation 1.
+
+Under the null hypothesis that there is no difference between the population averages, the difference between the sample averages $\bar{Y}-\bar{X}$, with $\bar{X}$ and $\bar{Y}$ the sample average for the two diets respectively, is approximated by a normal distribution centered at 0 (there is no difference) and with standard deviation $\sqrt{\sigma_X^2 +\sigma_Y^2}/\sqrt{N}$. 
+
+This suggests that this ratio:
+
+$$
+\frac{\bar{Y}-\bar{X}}{\sqrt{\frac{\sigma_X^2}{M} + \frac{\sigma_Y^2}{N}}}
+$$
+
+is approximated by a normal distribution centered at 0 and standard deviation 1.  Using this approximation makes computing p-values simple because we know the proportion of the distribution under any value. For example, only 5% of these values are larger than 2 (in absolute value):
+
+```{r}
+pnorm(-2) + (1 - pnorm(2))
+```
+
+However, we can't claim victory just yet because we don't know the population standard deviations: $\sigma_X$ and $\sigma_Y$. These are unknown population parameters, but we can get around this by using the sample standard deviations, call them $s_X$ and $s_Y$. These are defined as: 
+
+$$ s_X^2 = \frac{1}{M-1} \sum_{i=1}^M (X_i - \bar{X})^2  \mbox{ and }  s_Y^2 = \frac{1}{N-1} \sum_{i=1}^N (Y_i - \bar{Y})^2 $$
+
+$s_X$ and $s_Y$ serve as estimates of $\sigma_X$ and $\sigma_Y$, so we can redefine our ratio as:
+
+$$
+\sqrt{N} \frac{\bar{Y}-\bar{X}}{\sqrt{s_X^2 +s_Y^2}}
+$$
+
+if $M=N$ or in general,
+
+$$
+\frac{\bar{Y}-\bar{X}}{\sqrt{\frac{s_X^2}{M} + \frac{s_Y^2}{N}}}
+$$
+
+The CLT tells us that when $M$ and $N$ are large, this random variable is normally distributed with mean 0 and SD 1. Thus we can compute p-values using the function `pnorm`.
+
+
+#### The t-distribution
+
+The CLT relies on large samples, what we refer to as _asymptotic results_. When the CLT does not apply, there is another option that does not rely on asymptotic results. When the original population from which a random variable, say $Y$, is sampled is normally distributed with mean 0, then we can calculate the distribution of: 
+
+$$
+\sqrt{N} \frac{\bar{Y}}{s_Y}
+$$
+
+This is the ratio of two random variables so it is not necessarily normal. The fact that the denominator can be small by chance increases the probability of observing large values.
+
+Here we will use the mice phenotype data as an example.
+
+```{r,message=FALSE}
+library(dplyr)
+dat <- read.csv("mice_pheno.csv")
+controlPopulation <- filter(dat,Sex == "F" & Diet == "chow") %>% dplyr::select(Bodyweight) %>% unlist
+hfPopulation <- filter(dat,Sex == "F" & Diet == "hf") %>% dplyr::select(Bodyweight) %>% unlist
+```
+
+It is important to keep in mind that what we are assuming to be normal here is the distribution of $y_1,y_2,\dots,y_n$, not the random variable $\bar{Y}$. Although we can't do this in practice, in this illustrative example, we get to see this distribution for both controls and high fat diet mice:
+
+```{r population_histograms, fig.cap="Histograms of all weights for both populations.",fig.width=10.5,fig.height=5.25}
+library(rafalib)
+mypar(1,2)
+hist(hfPopulation)
+hist(controlPopulation)
+```
+
+We can use *qq-plots* to confirm that the distributions are relatively close to being normally distributed. We will explore these plots in more depth in a later section, but the important thing to know is that it compares data (on the y-axis) against a theoretical distribution (on the x-axis). If the points fall on the identity line, then the data is close to the theoretical distribution.
+
+```{r population_qqplots, fig.cap="Quantile-quantile plots of all weights for both populations.",fig.width=10.5,fig.height=5.25}
+mypar(1,2)
+qqnorm(hfPopulation)
+qqline(hfPopulation)
+qqnorm(controlPopulation)
+qqline(controlPopulation)
+```
+
+The larger the sample, the more forgiving the result is to the weakness of this approximation. In the next section, we will see that for this particular dataset the t-distribution works well even for sample sizes as small as 3. 
+
+
+
+
+### Exercizes Week 2
+
+#### Random Variables
+
+We are now going to increase the number of times we redo the sample from 1,000 to 10,000. Set the seed at 1, then using a for-loop take a random sample of 5 mice 10,000 times. Save these averages. What proportion of these 10,000 averages are more than 1 gram away from the average of x ?
+
+```{r}
+dat <- read.csv("femaleControlsPopulation.csv")
+
+set.seed(1)
+n <- 10000
+averages5 <- vector("numeric",n)
+for(i in 1:n){
+  X <- sample(x,5)
+  averages5[i] <- mean(X)
+}
+hist(averages5) ##take a look
+mean( abs( averages5 - mean(x) ) > 1)
+```
+
+We will use the data set called "Gapminder" which is available as an R-package on Github. This data set contains the life expectancy, GDP per capita, and population by country, every five years, from 1952 to 2007.
+
+```{r}
+library(gapminder)
+data(gapminder)
+head(gapminder)
+```
+
+What is the proportion of countries in 1952 that have a life expectancy less than or equal to 40?
+What is the proportion of countries in 1952 that have a life expectancy between 40 and 60 years?
+
+```{r}
+dat1952 = gapminder[ gapminder$year == 1952, ]
+x = dat1952$lifeExp
+mean(x <= 40)
+mean(x <= 60) - mean(x <= 40)
+```
+
+Suppose we want to plot the proportions of countries with life expectancy q for a range of different years. R has a built in function for this, plot(ecdf(x)), but suppose we didn't know this. 
+
+```{r}
+prop <- function(q) {
+  mean(x <= q)
+}
+qs <- seq(from=min(x), to=max(x), length=20)
+props <- sapply(qs, prop)
+plot(qs, props)
+
+props = sapply(qs, function(q) mean(x <= q))  # same but shorter
+
+plot(ecdf(x))
+```
+
+Use a histogram to "look" at the distribution of averages we get with a sample size of 5 and a sample size of 50. How would you say they differ?
+For the ones obtained from a sample size of 50, what proportion are between 23 and 25?
+
+```{r}
+dat <- read.csv("femaleControlsPopulation.csv")
+x <- unlist(dat)
+
+# make averages5
+set.seed(1)
+n <- 1000
+averages5 <- vector("numeric",n)
+for(i in 1:n){
+  X <- sample(x,5)
+  averages5[i] <- mean(X)
+}
+
+# make averages50
+set.seed(1)
+n <- 1000
+averages50 <- vector("numeric",n)
+for(i in 1:n){
+  X <- sample(x,50)
+  averages50[i] <- mean(X)
+}
+
+library(rafalib) 
+mypar(1,2)
+hist(averages5, xlim=c(18,30))
+hist(averages50, xlim=c(18,30))
+mean( averages50 < 25 & averages50 > 23)
+```
+
+Note that you can use the function `pnorm()` to find the proportion of observations below a cutoff `x` given a normal distribution with mean $\mu$ and standard deviation $\sigma$ with `pnorm(x, mu, sigma)` or `pnorm( (x-mu)/sigma )`.
+
+What is the proportion of observations between 23 and 25 in a normal distribution with average 23.9 and standard deviation 0.43?
+
+```{r}
+pnorm(23, 23.9, 0.43) - pnorm(25, 23.9, 0.43)
+```
+
+#### Population, Samples and Estimates
+
+Now we will use a data set of the entire population including male mice.
+
+```{r}
+dat <- read.csv("mice_pheno.csv")
+dat <- na.omit( dat )
+```
+
+What is the population's average? 
+
+```{r}
+x <- filter(dat, Sex=="M" & Diet=="chow") %>% dplyr::select(Bodyweight) %>% unlist
+mean(x)
+```
+
+Now use the `rafalib` package and use the `popsd()` function to compute the population standard deviation.
+
+```{r, message=FALSE}
+library(rafalib)
+popsd(x)
+```
+
+Set the seed at 1. Take a random sample  *X*  of size 25 from `x`. What is the sample average?
+
+```{r}
+set.seed(1)
+X <- sample(x,25)
+mean(X)
+```
+
+Use `dplyr` to create a vector `y` with the body weight of all males on the high fat (`hf`) diet. What is this population's average?
+```{r}
+y <- filter(dat, Sex=="M" & Diet=="hf") %>% dplyr::select(Bodyweight) %>% unlist
+mean(y)
+```
+
+Now use the `rafalib` package and use the `popsd()` function to compute the population standard deviation.
+
+```{r, message=FALSE}
+library(rafalib)
+popsd(y)
+```
+
+Set the seed at 1. Take a random sample  *Y*  of size 25 from `y`. What is the sample average?
+```{r}
+set.seed(1)
+Y <- sample(y,25)
+mean(Y)
+```
+
+What is the difference in absolute value between the population averages (y−x) and the sample averages (Y−X)?
+
+```{r}
+abs( ( mean(y) - mean(x) ) - ( mean(Y) - mean(X) ) )
+```
+
+Repeat the above for females, this time setting the seed to 2. What is the difference in absolute value between  the population averages (y−x) and the sample averages (Y−X)?
+
+```{r}
+x <- filter(dat, Sex=="F" & Diet=="chow") %>% dplyr::select(Bodyweight) %>% unlist
+set.seed(2)
+X <- sample(x,25)
+y <- filter(dat, Sex=="F" & Diet=="hf") %>% dplyr::select(Bodyweight) %>% unlist
+set.seed(2)
+Y <- sample(y,25)
+abs( ( mean(y) - mean(x) ) - ( mean(Y) - mean(X) ) )
+```
+
+The population variance of the females is smaller than that of the males; thus, the sample variable has less variability.
+
+
+#### Central Limit Theorem
+
+Now we will again use a data set of the entire population including male mice.
+
+```{r}
+dat <- read.csv("mice_pheno.csv")
+dat <- na.omit( dat )
+```
+
+If a list of numbers has a distribution that is well approximated by the normal distribution, what proportion of these numbers are within 1, 2 or 3 standard deviation away from the list's average?
+
+```{r}
+pnorm(1)-pnorm(-1)
+pnorm(2)-pnorm(-2)
+pnorm(3)-pnorm(-3)
+```
+
+Define `y` to be the weights of males on the control diet. What proportion of the mice are within 1, 2 or 3 standard deviation away from the average weight?
+
+```{r}
+y <- filter(dat, Sex=="M" & Diet=="chow") %>% dplyr::select(Bodyweight) %>% unlist
+z <- ( y - mean(y) ) / popsd(y)
+mean( abs(z) <=1 )
+mean( abs(z) <=2)
+mean( abs(z) <=3)
+```
+
+Note that the numbers for the normal distribution and our weights are relatively close. Also, notice that we are indirectly comparing quantiles of the normal distribution to quantiles of the mouse weight distribution. We can actually compare all quantiles using a qqplot. The mouse weights are well approximated by the normal distribution, although the larger values (right tail) are larger than predicted by the normal. This is consistent with the differences seen between question 3 and 6.
+
+```{r}
+qqnorm(z)
+abline(0,1)
+```
+
+Create the above qq-plot for the four populations: male/females on each of the two diets. What is the best explanation for all these mouse weights being well approximated by the normal distribution? --> This just happens to be how nature behaves in this particular case. Perhaps the result of many biological factors averaging out.
+
+```{r}
+mypar(2,2)
+y <- filter(dat, Sex=="M" & Diet=="chow") %>% dplyr::select(Bodyweight) %>% unlist
+z <- ( y - mean(y) ) / popsd(y)
+qqnorm(z);abline(0,1)
+y <- filter(dat, Sex=="F" & Diet=="chow") %>% dplyr::select(Bodyweight) %>% unlist
+z <- ( y - mean(y) ) / popsd(y)
+qqnorm(z);abline(0,1)
+y <- filter(dat, Sex=="M" & Diet=="hf") %>% dplyr::select(Bodyweight) %>% unlist
+z <- ( y - mean(y) ) / popsd(y)
+qqnorm(z);abline(0,1)
+y <- filter(dat, Sex=="F" & Diet=="hf") %>% dplyr::select(Bodyweight) %>% unlist
+z <- ( y - mean(y) ) / popsd(y)
+qqnorm(z);abline(0,1)
+```
+
+We will now take a sample of size 25 from the population of males on the chow diet. The average of this sample is our random variable. We will use the `replicate()` function to observe 10,000 realizations of this random variable. Set the seed at 1, then generate these 10,000 averages. Make a histogram and qq-plot of these 10,000 numbers against the normal distribution. We can see that, as predicted by the CLT, the distribution of the random variable is very well approximated by the normal distribution. What is the average of the distribution of the sample average?
+
+```{r}
+y <- filter(dat, Sex=="M" & Diet=="chow") %>% dplyr::select(Bodyweight) %>% unlist
+set.seed(1)
+avgs <- replicate(10000, mean( sample(y, 25)))
+mypar(1,2)
+hist(avgs)
+qqnorm(avgs)
+qqline(avgs)
+mean(avgs)
+```
+
+What is the standard deviation of the distribution of sample averages (use popsd())?
+
+```{r}
+popsd(avgs)
+```
+
+
+#### Central Limit Theorem in practice
+
+Let’s use our data to see how well the central limit theorem approximates sample averages from our data. Start by selecting only female mice since males and females have different weights. We will select three mice from each population.
+
+```{r}
+dat <- read.csv("mice_pheno.csv") #file was previously downloaded
+```
+
+```{r, message=FALSE}
+library(dplyr)
+controlPopulation <- filter(dat,Sex == "F" & Diet == "chow") %>% dplyr::select(Bodyweight) %>% unlist
+hfPopulation <- filter(dat,Sex == "F" & Diet == "hf") %>% dplyr::select(Bodyweight) %>% unlist
+```
+
+We can compute the population parameters of interest using the mean function.
+
+```{r}
+mu_hf <- mean(hfPopulation)
+mu_control <- mean(controlPopulation)
+print(mu_hf - mu_control)
+```
+
+Compute the population standard deviations as well. We do not use the R function `sd` because this would compute the estimates that divide by the sample size - 1 and we want the population estimates. So to be mathematically correct, we do not use `sd` or `var`. Instead, we use the `popvar` and `popsd` function in `rafalib`:
+
+```{r, message=FALSE}
+library(rafalib)
+sd_hf <- popsd(hfPopulation)
+sd_control <- popsd(controlPopulation)
+```
+
+Remember that in practice we do not get to compute these population parameters. These are values we never see. In general, we want to estimate them from samples.
+
+```{r}
+N <- 12
+hf <- sample(hfPopulation, N)
+control <- sample(controlPopulation, N)
+```
+
+As we described, the CLT tells us that for large $N$, each of these is approximately normal with average population mean and standard error population variance divided by $N$. We mentioned that a rule of thumb is that $N$ should be 30 or more. However, that is just a rule of thumb since the preciseness of the approximation depends on the population distribution. Here we can actually check the approximation and we do that for various values of $N$.
+
+Now we use `sapply` and `replicate` instead of `for` loops, which makes for cleaner code (we do not have to pre-allocate a vector, R takes care of this for us):
+
+```{r}
+Ns <- c(3,12,25,50)
+B <- 10000 #number of simulations
+res <-  sapply(Ns,function(n) {
+  replicate(B,mean(sample(hfPopulation,n))-mean(sample(controlPopulation,n)))
+})
+```
+
+Now we can use qq-plots to see how well CLT approximations works for these. If in fact the normal distribution is a good approximation, the points should fall on a straight line when compared to normal quantiles. The more it deviates, the worse the approximation. In the title, we also show the average and SD of the observed distribution, which demonstrates how the SD decreases with $\sqrt{N}$ as predicted.
+
+
+```{r}
+mypar(2,2)
+for (i in seq(along=Ns)) {
+  titleavg <- signif(mean(res[,i]),3)
+  titlesd <- signif(popsd(res[,i]),3)
+  title <- paste0("N=",Ns[i]," Avg=",titleavg," SD=",titlesd)
+  qqnorm(res[,i],main=title)
+  qqline(res[,i],col=2)
+}
+```
+
+Here we see a pretty good fit even for 3. Why is this? Because the population itself is relatively close to normally distributed, the averages are close to normal as well (the sum of normals is also a normal). In practice, we actually calculate a ratio: we divide by the estimated standard deviation. Here is where the sample size starts to matter more.
+
+
+```{r}
+Ns <- c(3,12,25,50)
+B <- 10000 #number of simulations
+##function to compute a t-stat
+computetstat <- function(n) {
+  y <- sample(hfPopulation,n)
+  x <- sample(controlPopulation,n)
+  (mean(y)-mean(x))/sqrt(var(y)/n+var(x)/n)
+}
+res <-  sapply(Ns,function(n) {
+  replicate(B,computetstat(n))
+})
+mypar(2,2)
+for (i in seq(along=Ns)) {
+  qqnorm(res[,i],main=Ns[i])
+  qqline(res[,i],col=2)
+}
+```
+
+
+So we see that for $N=3$, the CLT does not provide a usable approximation. For $N=12$, there is a slight deviation at the higher values, although the approximation appears useful. For 25 and 50, the approximation is spot on.
+
+This simulation only proves that $N=12$ is large enough in this case, not in general. As mentioned above, we will not be able to perform this simulation in most situations. We only use the simulation to illustrate the concepts behind the CLT and its limitations. In future sections, we will describe the approaches we actually use in practice. 
