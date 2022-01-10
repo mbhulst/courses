@@ -1,4 +1,4 @@
 # courses
-Here I will store some files for the courses that I have taken
-- bioinformatics: Coursera Bioinformatics I-III from Pavel Pevzner
-- statistics: EdX Statistics and R course HarvardX# courses
+Here I will store some files for the courses that I have taken:
+- bioinformatics: Coursera Bioinformatics courses by Pavel Pevzner
+- statistics: EdX Statistics and R course by HarvardX
