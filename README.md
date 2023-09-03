@@ -1,3 +1,3 @@
 # courses 
-- bioinformatics: Coursera Bioinformatics I-III from Pavel Pevzner 
+- bioinformatics: Coursera Bioinformatics courses from UC San Diego 
 - statistics: EdX Statistics and R course from HarvardX
