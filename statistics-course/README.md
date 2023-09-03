@@ -1,2 +1,2 @@
-This files were written for the Statistics and R course of HarvardX at edX
+This files were written for the EdX Statistics and R course of HarvardX
 https://www.edx.org/course/statistics-and-r
